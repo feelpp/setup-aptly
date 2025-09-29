@@ -279,7 +279,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create Release
+      - name: Create or Update Release
+        id: release
+        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           draft: false
@@ -288,6 +290,16 @@ jobs:
           generate_release_notes: true
           tag_name: ${{ github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          make_latest: ${{ !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc') }}
+          fail_on_unmatched_files: false
+
+      - name: Handle existing release
+        if: steps.release.outcome == 'failure'
+        run: |
+          echo "Release may already exist for tag ${{ github.ref_name }}"
+          echo "This can happen when the release was created via GitHub UI"
+          echo "The major version tag will still be updated below"
+          echo "⚠️ Release creation skipped - release may already exist"
 
       - name: Update major version tag
         if: ${{ !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc') }}
