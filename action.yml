@@ -1,0 +1,260 @@
+name: 'Setup aptly'
+description: 'Install aptly package manager from GitHub releases and optionally publish packages'
+branding:
+  icon: 'package'
+  color: 'blue'
+
+inputs:
+  version:
+    description: 'The version of aptly to install'
+    required: false
+    default: '1.6.2'
+  architecture:
+    description: 'The architecture to install'
+    required: false
+    default: 'amd64'
+  cache:
+    description: 'Enable caching of aptly installation'
+    required: false
+    default: 'true'
+  publish:
+    description: 'Whether to publish packages to APT repository'
+    required: false
+    default: 'false'
+  component:
+    description: 'APT component name'
+    required: false
+    default: ''
+  distribution:
+    description: 'APT distribution (e.g. noble, jammy)'
+    required: false
+    default: 'noble'
+  channel:
+    description: 'Publication channel (stable, testing, pr)'
+    required: false
+    default: 'stable'
+  debs-path:
+    description: 'Path to .deb files to publish'
+    required: false
+    default: ''
+  pages-repo:
+    description: 'GitHub Pages repository URL'
+    required: false
+    default: ''
+  pages-branch:
+    description: 'GitHub Pages branch'
+    required: false
+    default: 'gh-pages'
+  gpg-key-id:
+    description: 'GPG key ID for signing'
+    required: false
+    default: ''
+  gpg-passphrase:
+    description: 'GPG passphrase'
+    required: false
+    default: ''
+  apt-repo-path:
+    description: 'Path to the APT scripts directory (feelpp/apt main branch checkout)'
+    required: false
+    default: '.'
+
+outputs:
+  aptly-version:
+    description: 'The installed version of aptly'
+    value: ${{ steps.install.outputs.aptly-version || steps.cache-output.outputs.aptly-version }}
+  aptly-path:
+    description: 'The path to the aptly executable'
+    value: ${{ steps.install.outputs.aptly-path || steps.cache-output.outputs.aptly-path }}
+  published:
+    description: 'Whether packages were published'
+    value: ${{ steps.publish.outputs.published }}
+  publication-url:
+    description: 'URL of the published APT repository'
+    value: ${{ steps.publish.outputs.publication-url }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Determine platform
+      id: platform
+      shell: bash
+      run: |
+        case "${{ runner.os }}" in
+          Linux)
+            echo "os=linux" >> $GITHUB_OUTPUT
+            ;;
+          macOS)
+            echo "os=darwin" >> $GITHUB_OUTPUT
+            ;;
+          Windows)
+            echo "os=windows" >> $GITHUB_OUTPUT
+            ;;
+          *)
+            echo "Unsupported OS: ${{ runner.os }}"
+            exit 1
+            ;;
+        esac
+
+    - name: Set cache key
+      id: cache-key
+      shell: bash
+      run: |
+        echo "cache-key=aptly-${{ inputs.version }}-${{ steps.platform.outputs.os }}-${{ inputs.architecture }}" >> $GITHUB_OUTPUT
+
+    - name: Cache aptly installation
+      if: inputs.cache == 'true'
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.local/bin/aptly
+        key: ${{ steps.cache-key.outputs.cache-key }}
+
+    - name: Install aptly
+      id: install
+      if: inputs.cache != 'true' || steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        VERSION="${{ inputs.version }}"
+        ARCH="${{ inputs.architecture }}"
+        OS="${{ steps.platform.outputs.os }}"
+
+        echo "Installing aptly version ${VERSION} for ${OS}_${ARCH}"
+
+        mkdir -p ~/.local/bin
+
+        DOWNLOAD_URL="https://github.com/aptly-dev/aptly/releases/download/v${VERSION}/aptly_${VERSION}_${OS}_${ARCH}.zip"
+        TEMP_DIR=$(mktemp -d)
+
+        echo "Downloading from: ${DOWNLOAD_URL}"
+        curl -fsSL "${DOWNLOAD_URL}" -o "${TEMP_DIR}/aptly.zip"
+
+        cd "${TEMP_DIR}"
+        unzip -q aptly.zip
+
+        APTLY_DIR=$(find . -name "aptly_${VERSION}_${OS}_${ARCH}" -type d | head -1)
+        if [[ -z "${APTLY_DIR}" ]]; then
+          echo "Error: Could not find aptly directory in archive"
+          exit 1
+        fi
+
+        if [[ ! -f "${APTLY_DIR}/aptly" ]]; then
+          echo "Error: aptly binary not found in ${APTLY_DIR}"
+          exit 1
+        fi
+
+        cp "${APTLY_DIR}/aptly" ~/.local/bin/aptly
+        chmod +x ~/.local/bin/aptly
+
+        rm -rf "${TEMP_DIR}"
+
+        echo ~/.local/bin >> $GITHUB_PATH
+
+        INSTALLED_VERSION=$(~/.local/bin/aptly version | grep "aptly version:" | cut -d' ' -f3)
+        echo "Successfully installed aptly version: ${INSTALLED_VERSION}"
+
+        echo "aptly-version=${INSTALLED_VERSION}" >> $GITHUB_OUTPUT
+        echo "aptly-path=~/.local/bin/aptly" >> $GITHUB_OUTPUT
+
+    - name: Set outputs from cache
+      if: inputs.cache == 'true' && steps.cache.outputs.cache-hit == 'true'
+      id: cache-output
+      shell: bash
+      run: |
+        echo ~/.local/bin >> $GITHUB_PATH
+
+        INSTALLED_VERSION=$(~/.local/bin/aptly version | grep "aptly version:" | cut -d' ' -f3)
+        echo "Using cached aptly version: ${INSTALLED_VERSION}"
+
+        echo "aptly-version=${INSTALLED_VERSION}" >> $GITHUB_OUTPUT
+        echo "aptly-path=~/.local/bin/aptly" >> $GITHUB_OUTPUT
+
+    - name: Verify installation
+      shell: bash
+      run: |
+        echo "Verifying aptly installation..."
+        aptly version
+        echo "aptly installed successfully at: $(which aptly)"
+
+    - name: Publish to APT repository
+      if: inputs.publish == 'true'
+      id: publish
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if [[ -z "${{ inputs.component }}" ]]; then
+          echo "Error: component is required when publish=true"
+          exit 1
+        fi
+
+        if [[ -z "${{ inputs.debs-path }}" ]]; then
+          echo "Error: debs-path is required when publish=true"
+          exit 1
+        fi
+
+        if [[ -z "${{ inputs.pages-repo }}" ]]; then
+          echo "Error: pages-repo is required when publish=true"
+          exit 1
+        fi
+
+        APT_SCRIPTS_PATH="${{ inputs.apt-repo-path }}"
+        echo "Working with APT scripts at: $APT_SCRIPTS_PATH"
+
+        if [ ! -f "$APT_SCRIPTS_PATH/scripts/aptly_publish.py" ]; then
+          echo "Error: aptly_publish.py not found at $APT_SCRIPTS_PATH/scripts/aptly_publish.py"
+          ls -la "$APT_SCRIPTS_PATH/" || echo "Directory does not exist"
+          exit 1
+        fi
+
+        DEB_FILES="${{ inputs.debs-path }}"
+        if [[ "$DEB_FILES" != /* ]]; then
+          DEB_FILES="$GITHUB_WORKSPACE/$DEB_FILES"
+        fi
+
+        echo "Looking for .deb files in: $DEB_FILES"
+        if ! ls ${DEB_FILES}/*.deb 1> /dev/null 2>&1; then
+          echo "No .deb files found in: $DEB_FILES"
+          ls -la "$DEB_FILES" || echo "Directory does not exist"
+          exit 1
+        fi
+
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+
+        unset APTLY_CONFIG
+        unset APTLY_ROOT_DIR
+        unset APTLY_ROOT
+        unset APTLY_DB_DIR
+
+        PUBLISH_CMD=(
+          python3 "$APT_SCRIPTS_PATH/scripts/aptly_publish.py"
+          --component "${{ inputs.component }}"
+          --distro "${{ inputs.distribution }}"
+          --channel "${{ inputs.channel }}"
+          --debs "$DEB_FILES"
+          --pages-repo "${{ inputs.pages-repo }}"
+          --branch "${{ inputs.pages-branch }}"
+          --verbose
+        )
+
+        if [[ -n "${{ inputs.gpg-key-id }}" ]]; then
+          PUBLISH_CMD+=(--sign --keyid "${{ inputs.gpg-key-id }}")
+          if [[ -n "${{ inputs.gpg-passphrase }}" ]]; then
+            PUBLISH_CMD+=(--passphrase "${{ inputs.gpg-passphrase }}")
+          fi
+        fi
+
+        echo "Executing: ${PUBLISH_CMD[*]}"
+        "${PUBLISH_CMD[@]}"
+
+        echo "published=true" >> $GITHUB_OUTPUT
+
+        REPO_URL="${{ inputs.pages-repo }}"
+        if [[ "$REPO_URL" == *"github.com"* ]]; then
+          PAGES_URL=$(echo "$REPO_URL" | sed 's|https://github.com/\([^/]*\)/\([^/]*\).*|https://\1.github.io/\2|')
+          echo "publication-url=${PAGES_URL}/${{ inputs.channel }}/dists/${{ inputs.distribution }}/" >> $GITHUB_OUTPUT
+        else
+          echo "publication-url=$REPO_URL/${{ inputs.channel }}/dists/${{ inputs.distribution }}/" >> $GITHUB_OUTPUT
+        fi
