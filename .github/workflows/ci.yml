@@ -127,7 +127,7 @@ jobs:
           - runner: ubuntu-24.04
             arch: amd64
             aptly-version: '1.6.2'
-          - runner: ubuntu-24.04-arm64
+          - runner: ubuntu-24.04-arm
             arch: arm64
             aptly-version: '1.6.2'
           - runner: ubuntu-22.04
@@ -266,3 +266,23 @@ jobs:
         run: |
           source .venv/bin/activate
           python test.py
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test-aptly-installation, test-aptly-publishing, test-cross-platform, test-input-validation, test-caching, integration-test, test-python]
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc')}}
+          name: Release ${{ github.ref_name }}
+          generate_release_notes: true
+          tag_name: ${{ github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
