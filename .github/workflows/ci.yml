@@ -21,10 +21,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
         with:
-          python-version: '3.x'
+          enable-cache: true
+
+      - name: Setup Python environment
+        run: |
+          uv venv
+          uv pip install -r requirements-test.txt
 
       - name: Test aptly installation
         uses: ./
@@ -34,7 +39,8 @@ jobs:
 
       - name: Run Python test suite
         run: |
-          python3 test.py
+          source .venv/bin/activate
+          python test.py
 
   test-aptly-publishing:
     name: Test Aptly Publishing (Mock)
@@ -249,19 +255,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
         with:
-          python-version: '3.x'
+          enable-cache: true
 
-      - name: Install test dependencies
+      - name: Setup Python environment and install dependencies
         run: |
-          pip install -r requirements-test.txt
+          uv venv
+          uv pip install -r requirements-test.txt
 
       - name: Run Python tests
         run: |
+          source .venv/bin/activate
           python -m pytest tests/ -v --tb=short
 
       - name: Run local Python test script
         run: |
-          python3 test.py
+          source .venv/bin/activate
+          python test.py
