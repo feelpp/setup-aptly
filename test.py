@@ -168,7 +168,7 @@ def test_input_validation():
     
     test_cases = [
         {"name": "Valid version", "version": "1.6.2", "cache": "true", "expected": "valid"},
-        {"name": "Different version", "version": "1.5.0", "cache": "false", "expected": "valid"},
+        {"name": "Different version", "version": "1.6.1", "cache": "false", "expected": "valid"},
         {"name": "Invalid cache value", "version": "1.6.2", "cache": "invalid", "expected": "warning"}
     ]
     
