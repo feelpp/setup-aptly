@@ -132,7 +132,7 @@ jobs:
             aptly-version: '1.6.2'
           - runner: ubuntu-22.04
             arch: amd64
-            aptly-version: '1.5.0'
+            aptly-version: '1.6.2'
     
     steps:
       - name: Checkout
