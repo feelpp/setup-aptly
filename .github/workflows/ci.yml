@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     tags:
-      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10 including semver
+      - 'v*.*.*' # Push events to matching semantic versions only (v1.0.0, v1.2.3, etc.)
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -288,3 +288,20 @@ jobs:
           generate_release_notes: true
           tag_name: ${{ github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update major version tag
+        if: ${{ !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc') }}
+        run: |
+          # Extract major version from tag (e.g., v1.2.3 -> v1)
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          MAJOR_VERSION=$(echo $TAG_NAME | sed -E 's/^(v[0-9]+)\..*/\1/')
+          
+          echo "Updating major version tag $MAJOR_VERSION to point to $TAG_NAME"
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create/update the major version tag
+          git tag -f $MAJOR_VERSION
+          git push origin $MAJOR_VERSION --force
