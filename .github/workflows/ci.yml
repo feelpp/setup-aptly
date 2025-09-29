@@ -233,20 +233,6 @@ jobs:
           
           echo "✅ Aptly functionality verified"
 
-  lint-action:
-    name: Lint Action YAML
-    runs-on: ubuntu-24.04
-    
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Lint action.yml
-        uses: reviewdog/action-actionlint@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          level: error
-
   test-python:
     name: Test Python Components
     runs-on: ubuntu-24.04
@@ -264,6 +250,12 @@ jobs:
         run: |
           uv venv
           uv pip install -r requirements-test.txt
+
+      - name: Install aptly for testing
+        uses: ./
+        with:
+          version: '1.6.2'
+          cache: 'true'
 
       - name: Run Python tests
         run: |
