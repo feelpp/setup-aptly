@@ -1,0 +1,4 @@
+# Test requirements for setup-aptly
+pytest>=7.0.0
+pytest-mock>=3.10.0
+requests>=2.28.0
