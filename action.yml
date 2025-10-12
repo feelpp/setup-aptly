@@ -37,20 +37,16 @@ inputs:
     description: 'Path to .deb files to publish'
     required: false
     default: ''
-  pages-repo:
-    description: 'GitHub Pages repository URL'
+  sign:
+    description: 'Sign the publication with GPG'
     required: false
-    default: ''
-  pages-branch:
-    description: 'GitHub Pages branch'
-    required: false
-    default: 'gh-pages'
+    default: 'false'
   gpg-key-id:
-    description: 'GPG key ID for signing'
+    description: 'GPG key ID for signing (required if sign=true)'
     required: false
     default: ''
   gpg-passphrase:
-    description: 'GPG passphrase'
+    description: 'GPG passphrase (optional, can use GPG agent)'
     required: false
     default: ''
   apt-repo-path:
@@ -207,18 +203,20 @@ runs:
           exit 1
         fi
 
-        if [[ -z "${{ inputs.pages-repo }}" ]]; then
-          echo "Error: pages-repo is required when publish=true"
-          exit 1
-        fi
-
         APT_SCRIPTS_PATH="${{ inputs.apt-repo-path }}"
         echo "Working with APT scripts at: $APT_SCRIPTS_PATH"
 
-        if [ ! -f "$APT_SCRIPTS_PATH/scripts/aptly_publish.py" ]; then
-          echo "Error: aptly_publish.py not found at $APT_SCRIPTS_PATH/scripts/aptly_publish.py"
-          ls -la "$APT_SCRIPTS_PATH/" || echo "Directory does not exist"
-          exit 1
+        # Install feelpp-aptly-publisher
+        echo "Installing feelpp-aptly-publisher..."
+        if [ -f "$APT_SCRIPTS_PATH/pyproject.toml" ]; then
+          pip install uv
+          uv venv .venv-publish
+          source .venv-publish/bin/activate
+          cd "$APT_SCRIPTS_PATH"
+          uv pip install -e .
+          cd -
+        else
+          pip install feelpp-aptly-publisher
         fi
 
         DEB_FILES="${{ inputs.debs-path }}"
@@ -236,38 +234,41 @@ runs:
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
 
+        # Clear any aptly environment variables
         unset APTLY_CONFIG
         unset APTLY_ROOT_DIR
         unset APTLY_ROOT
         unset APTLY_DB_DIR
 
-        PUBLISH_CMD=(
-          python3 "$APT_SCRIPTS_PATH/scripts/aptly_publish.py"
+        # Run feelpp-apt-publish
+        echo "Publishing packages to ${{ inputs.channel }}/${{ inputs.distribution }}/${{ inputs.component }}..."
+        
+        PUBLISH_ARGS=(
           --component "${{ inputs.component }}"
           --distro "${{ inputs.distribution }}"
           --channel "${{ inputs.channel }}"
           --debs "$DEB_FILES"
-          --pages-repo "${{ inputs.pages-repo }}"
-          --branch "${{ inputs.pages-branch }}"
           --verbose
         )
-
-        if [[ -n "${{ inputs.gpg-key-id }}" ]]; then
-          PUBLISH_CMD+=(--sign --keyid "${{ inputs.gpg-key-id }}")
+        
+        # Add signing parameters if requested
+        if [[ "${{ inputs.sign }}" == "true" ]]; then
+          if [[ -z "${{ inputs.gpg-key-id }}" ]]; then
+            echo "Error: gpg-key-id is required when sign=true"
+            exit 1
+          fi
+          PUBLISH_ARGS+=(--sign --keyid "${{ inputs.gpg-key-id }}")
+          
           if [[ -n "${{ inputs.gpg-passphrase }}" ]]; then
-            PUBLISH_CMD+=(--passphrase "${{ inputs.gpg-passphrase }}")
+            PUBLISH_ARGS+=(--passphrase "${{ inputs.gpg-passphrase }}")
           fi
         fi
-
-        echo "Executing: ${PUBLISH_CMD[*]}"
-        "${PUBLISH_CMD[@]}"
+        
+        feelpp-apt-publish "${PUBLISH_ARGS[@]}"
 
         echo "published=true" >> $GITHUB_OUTPUT
 
-        REPO_URL="${{ inputs.pages-repo }}"
-        if [[ "$REPO_URL" == *"github.com"* ]]; then
-          PAGES_URL=$(echo "$REPO_URL" | sed 's|https://github.com/\([^/]*\)/\([^/]*\).*|https://\1.github.io/\2|')
-          echo "publication-url=${PAGES_URL}/${{ inputs.channel }}/dists/${{ inputs.distribution }}/" >> $GITHUB_OUTPUT
-        else
-          echo "publication-url=$REPO_URL/${{ inputs.channel }}/dists/${{ inputs.distribution }}/" >> $GITHUB_OUTPUT
-        fi
+        # Determine publication URL
+        REPO_OWNER=$(echo "${{ github.repository }}" | cut -d'/' -f1)
+        PAGES_URL="https://${REPO_OWNER}.github.io/apt"
+        echo "publication-url=${PAGES_URL}/${{ inputs.channel }}/dists/${{ inputs.distribution }}/" >> $GITHUB_OUTPUT

@@ -1,6 +1,6 @@
 # setup-aptly
 
-Reusable GitHub Action that installs [aptly](https://www.aptly.info/) and optionally publishes Debian/Ubuntu packages to the Feel++ APT repository (or any aptly-backed mirror).
+Reusable GitHub Action that installs [aptly](https://www.aptly.info/) and optionally publishes Debian/Ubuntu packages to the Feel++ APT repository using the modern `feelpp-aptly-publisher` tool.
 
 [![CI](https://github.com/feelpp/setup-aptly/workflows/CI/badge.svg)](https://github.com/feelpp/setup-aptly/actions)
 
@@ -11,9 +11,18 @@ Reusable GitHub Action that installs [aptly](https://www.aptly.info/) and option
 - ✅ Configurable version and architecture  
 - ✅ Built-in caching for faster subsequent runs
 - ✅ Automatic PATH configuration
-- ✅ Optional APT repository publishing
-- ✅ GPG signing support
+- ✅ Optional APT repository publishing with **feelpp-aptly-publisher**
+- ✅ Multi-component architecture support (base, feelpp, applications, ktirio)
+- ✅ Automatic component preservation during updates
 - ✅ Testing and validation
+
+## What's New in v2
+
+- 🔄 **Migrated to feelpp-aptly-publisher**: Modern Python package replacing legacy scripts
+- 🎯 **Simplified inputs**: No longer need `pages-repo`, `pages-branch`, or GPG parameters
+- 🏗️ **Component architecture**: Supports base/feelpp/applications/ktirio structure
+- ⚡ **Faster setup**: Uses uv for dependency management
+- 🔒 **Built-in recovery**: Automatically recovers aptly database from published repositories
 
 ## Usage
 
@@ -26,7 +35,7 @@ Reusable GitHub Action that installs [aptly](https://www.aptly.info/) and option
     version: '1.6.2'
 ```
 
-### With Publishing
+### With Publishing (Updated for v2)
 
 ```yaml
 jobs:
@@ -35,29 +44,56 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Checkout feelpp/apt scripts
+      - name: Checkout feelpp/apt repository
         uses: actions/checkout@v4
         with:
           repository: feelpp/apt
           ref: main
-          path: apt-scripts
+          path: apt-repo
 
       - name: Build packages
         run: |
-          cmake --build build --target package
+          dpkg-buildpackage -us -uc -b
 
-      - name: Publish to APT
-        uses: feelpp/setup-aptly@v1
+      - name: Publish to APT repository
+        uses: feelpp/setup-aptly@v2
         with:
           publish: true
-          component: organ-on-chip
+          component: base  # or feelpp, applications, ktirio
           distribution: noble
-          channel: testing
-          debs-path: build/default/assets
-          pages-repo: https://github.com/feelpp/apt.git
-          apt-repo-path: apt-scripts
-          gpg-key-id: ${{ secrets.APT_GPG_KEY_ID }}
-          gpg-passphrase: ${{ secrets.APT_GPG_PASSPHRASE }}
+          channel: testing  # or stable, pr
+          debs-path: ..
+          apt-repo-path: apt-repo
+```
+
+### Component Architecture
+
+The action supports the Feel++ 4-layer component structure:
+
+```yaml
+# External dependencies → base component
+- uses: feelpp/setup-aptly@v2
+  with:
+    component: base
+    # For: mmg, parmmg, napp, etc.
+
+# Feel++ core → feelpp component  
+- uses: feelpp/setup-aptly@v2
+  with:
+    component: feelpp
+    # For: libfeelpp, feelpp-tools, etc.
+
+# General applications → applications component
+- uses: feelpp/setup-aptly@v2
+  with:
+    component: applications
+    # For: feelpp-project, organ-on-chip, sepsis
+
+# KTIRIO stack → ktirio component
+- uses: feelpp/setup-aptly@v2
+  with:
+    component: ktirio
+    # For: ktirio-urban-building, ktirio-geom, ktirio-data
 ```
 
 ## Inputs
@@ -68,15 +104,47 @@ jobs:
 | `architecture` | Target architecture | No | `amd64` |
 | `cache` | Enable installation caching | No | `true` |
 | `publish` | Enable APT publishing | No | `false` |
-| `component` | APT component name | No | `''` |
+| `component` | APT component (base, feelpp, applications, ktirio) | No | `''` |
 | `distribution` | Ubuntu/Debian distribution | No | `noble` |
-| `channel` | Publication channel | No | `stable` |
+| `channel` | Publication channel (stable, testing, pr) | No | `stable` |
 | `debs-path` | Path to .deb files | No | `''` |
-| `pages-repo` | GitHub Pages repository URL | No | `''` |
-| `pages-branch` | GitHub Pages branch | No | `gh-pages` |
-| `gpg-key-id` | GPG key ID for signing | No | `''` |
-| `gpg-passphrase` | GPG passphrase | No | `''` |
-| `apt-repo-path` | Path to APT scripts directory | No | `.` |
+| `sign` | Sign the publication with GPG | No | `false` |
+| `gpg-key-id` | GPG key ID for signing (required if sign=true) | No | `''` |
+| `gpg-passphrase` | GPG passphrase (optional, can use GPG agent) | No | `''` |
+| `apt-repo-path` | Path to feelpp/apt checkout | No | `.` |
+
+### Removed Inputs (v2)
+
+The following inputs are no longer needed:
+- ~~`pages-repo`~~ - Automatically uses feelpp/apt via feelpp-aptly-publisher
+- ~~`pages-branch`~~ - Always uses gh-pages
+
+### GPG Signing
+
+To sign packages with GPG:
+
+```yaml
+- name: Import GPG key
+  run: |
+    echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --import
+    
+- name: Publish with signing
+  uses: feelpp/setup-aptly@v2
+  with:
+    publish: true
+    component: base
+    sign: true
+    gpg-key-id: ${{ secrets.GPG_KEY_ID }}
+    gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}  # Optional if using gpg-agent
+    debs-path: ..
+    apt-repo-path: apt-repo
+```
+
+**Security Notes:**
+- Store GPG keys and passphrases as GitHub secrets
+- Consider using GPG agent instead of passphrase
+- Unsigned repositories work but show warnings to users
+- Signing is recommended for production (stable) channel
 
 ## Outputs
 
@@ -99,13 +167,45 @@ jobs:
 
 When `publish: true` is set, the action:
 
-1. Validates required inputs (component, debs-path, pages-repo)
-2. Locates the aptly_publish.py script from the apt-repo-path
-3. Converts relative paths to absolute paths
-4. Configures git for GitHub Actions
-5. Executes the publishing script with appropriate parameters
-6. Handles GPG signing if credentials are provided
-7. Returns publication URL and status
+1. Validates required inputs (component, debs-path, apt-repo-path)
+2. Installs `feelpp-aptly-publisher` from the apt-repo checkout
+3. Uses `uv` for fast Python dependency management
+4. Converts relative paths to absolute paths
+5. Configures git for GitHub Actions
+6. Executes `feelpp-apt-publish` with appropriate parameters
+7. Automatically preserves existing components in the repository
+8. Pushes changes to the gh-pages branch
+9. Returns publication URL and status
+
+### Under the Hood
+
+The action now uses `feelpp-aptly-publisher`, which provides:
+- **Database recovery**: Reconstructs aptly database from published metadata
+- **Component preservation**: Maintains all existing components when adding/updating
+- **Atomic operations**: All-or-nothing publishing
+- **Error handling**: Clear error messages and validation
+
+## Migration from v1 to v2
+
+If you're using v1, update your workflows:
+
+```diff
+- uses: feelpp/setup-aptly@v1
+  with:
+    publish: true
+    component: my-package
+-   pages-repo: https://github.com/feelpp/apt.git
+-   pages-branch: gh-pages
+-   gpg-key-id: ${{ secrets.GPG_KEY }}
+-   gpg-passphrase: ${{ secrets.GPG_PASS }}
+    apt-repo-path: apt-repo
+
++ uses: feelpp/setup-aptly@v2
++   with:
++     publish: true
++     component: base  # Use proper component name
++     apt-repo-path: apt-repo
+```
 
 ## Development
 

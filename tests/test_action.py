@@ -47,9 +47,10 @@ def test_action_inputs():
         assert "description" in inputs[inp]
     
     # Test publishing inputs exist when needed
-    publishing_inputs = ["publish", "component", "debs-path", "pages-repo"]
+    publishing_inputs = ["publish", "component", "debs-path", "apt-repo-path", "distribution", "channel", "sign", "gpg-key-id", "gpg-passphrase"]
     for inp in publishing_inputs:
         assert inp in inputs
+
 
 def test_action_outputs():
     """Test that action outputs are properly defined."""
