@@ -96,28 +96,57 @@ jobs:
           echo "GPG_KEY_ID=$GPG_KEY_ID" >> $GITHUB_ENV
           echo "Generated test GPG key: $GPG_KEY_ID"
 
-      - name: Test mock publishing workflow
-        uses: ./
+      - name: Checkout APT repo (for local testing)
+        uses: actions/checkout@v4
         with:
-          publish: true
-          component: test-package
-          distribution: noble
-          channel: testing
-          debs-path: test-debs
-          pages-repo: https://github.com/feelpp/apt.git
-          gpg-key-id: ${{ env.GPG_KEY_ID }}
-          apt-repo-path: .
-        continue-on-error: true
+          repository: feelpp/apt
+          path: apt-repo
+
+      - name: Test publishing workflow (will fail at git push)
+        shell: bash
+        run: |
+          set +e  # Don't exit on error
+          
+          # Install feelpp-aptly-publisher
+          cd apt-repo
+          pip install -e .
+          cd ..
+          
+          # Run the publish command
+          # This will succeed up until the git push, which will fail without credentials
+          # That's expected and validates the rest of the publishing logic works
+          echo "Testing feelpp-apt-publish workflow..."
+          
+          feelpp-apt-publish \
+            --component test-package \
+            --distro noble \
+            --channel testing \
+            --debs test-debs \
+            --verbose \
+            --sign \
+            --keyid ${{ env.GPG_KEY_ID }} 2>&1 | tee publish-output.log
+          
+          EXIT_CODE=$?
+          
+          # Check if we got far enough to attempt the git push
+          if grep -q "git push origin gh-pages" publish-output.log; then
+            echo "✅ Publishing logic validated (failed at expected git push step)"
+            exit 0
+          elif grep -q "Publish test-package (noble/testing)" publish-output.log; then
+            echo "✅ Publishing logic validated (git operations executed)"
+            exit 0
+          else
+            echo "❌ Publishing failed before completing expected steps"
+            cat publish-output.log
+            exit 1
+          fi
+        continue-on-error: false
         id: mock-publish
 
-      - name: Verify mock publishing behavior
+      - name: Verify publishing behavior
         run: |
-          if [ "${{ steps.mock-publish.outcome }}" = "success" ]; then
-            echo "✅ Mock publishing workflow completed successfully"
-          else
-            echo "⚠️  Mock publishing failed as expected (no real git access)"
-            echo "This is normal for the mock test environment"
-          fi
+          echo "✅ Publishing workflow tested successfully"
+          echo "Note: Test validates publishing logic up to git push"
 
   test-cross-platform:
     name: Test Cross-Platform Support
