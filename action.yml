@@ -53,6 +53,10 @@ inputs:
     description: 'Path to the APT scripts directory (feelpp/apt main branch checkout)'
     required: false
     default: '.'
+  auto-bump:
+    description: 'Auto-bump Debian revision if package version already exists (default: false, use force-overwrite instead)'
+    required: false
+    default: 'false'
 
 outputs:
   aptly-version:
@@ -258,12 +262,17 @@ runs:
             exit 1
           fi
           PUBLISH_ARGS+=(--sign --keyid "${{ inputs.gpg-key-id }}")
-          
+
           if [[ -n "${{ inputs.gpg-passphrase }}" ]]; then
             PUBLISH_ARGS+=(--passphrase "${{ inputs.gpg-passphrase }}")
           fi
         fi
-        
+
+        # Add auto-bump if enabled (default: true)
+        if [[ "${{ inputs.auto-bump }}" == "true" ]]; then
+          PUBLISH_ARGS+=(--auto-bump)
+        fi
+
         feelpp-apt-publish "${PUBLISH_ARGS[@]}"
 
         echo "published=true" >> $GITHUB_OUTPUT
