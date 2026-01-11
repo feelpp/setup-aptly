@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-01-11
+
+### Added
+- New `auto-bump` input parameter for automatically incrementing Debian revision when package version already exists in repository
+- Default behavior is `false` to maintain backward compatibility and use force-overwrite instead
+
+### Notes
+- This provides an alternative to force-overwrite for handling duplicate package versions
+- Useful for development workflows where you want automatic version incrementing
+
 ## [2.0.0] - 2025-10-12
 
 ### Added
