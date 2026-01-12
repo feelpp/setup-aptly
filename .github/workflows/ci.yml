@@ -96,6 +96,12 @@ jobs:
           echo "GPG_KEY_ID=$GPG_KEY_ID" >> $GITHUB_ENV
           echo "Generated test GPG key: $GPG_KEY_ID"
 
+      - name: Setup aptly for publishing test
+        uses: ./
+        with:
+          version: '1.6.2'
+          cache: 'true'
+
       - name: Checkout APT repo (for local testing)
         uses: actions/checkout@v4
         with:
