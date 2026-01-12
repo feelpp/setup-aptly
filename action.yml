@@ -190,6 +190,10 @@ runs:
         aptly version
         echo "aptly installed successfully at: $(which aptly)"
 
+    - name: Setup uv
+      if: inputs.publish == 'true'
+      uses: astral-sh/setup-uv@v7
+
     - name: Publish to APT repository
       if: inputs.publish == 'true'
       id: publish
@@ -213,14 +217,13 @@ runs:
         # Install feelpp-aptly-publisher
         echo "Installing feelpp-aptly-publisher..."
         if [ -f "$APT_SCRIPTS_PATH/pyproject.toml" ]; then
-          pip install uv
           uv venv .venv-publish
           source .venv-publish/bin/activate
           cd "$APT_SCRIPTS_PATH"
           uv pip install -e .
           cd -
         else
-          pip install feelpp-aptly-publisher
+          uv pip install feelpp-aptly-publisher
         fi
 
         DEB_FILES="${{ inputs.debs-path }}"
