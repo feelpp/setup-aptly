@@ -218,16 +218,15 @@ runs:
         echo "Installing feelpp-aptly-publisher..."
         if [ -f "$APT_SCRIPTS_PATH/pyproject.toml" ]; then
           uv venv .venv-publish
+          source .venv-publish/bin/activate
           cd "$APT_SCRIPTS_PATH"
           uv pip install -e .
           cd -
         else
           uv venv .venv-publish
+          source .venv-publish/bin/activate
           uv pip install feelpp-aptly-publisher
         fi
-        
-        # Activate venv for subsequent commands
-        source .venv-publish/bin/activate
 
         DEB_FILES="${{ inputs.debs-path }}"
         if [[ "$DEB_FILES" != /* ]]; then
@@ -253,13 +252,13 @@ runs:
         # Run feelpp-apt-publish
         echo "Publishing packages to ${{ inputs.channel }}/${{ inputs.distribution }}/${{ inputs.component }}..."
         
-        PUBLISH_ARGS=(
-          --component "${{ inputs.component }}"
-          --distro "${{ inputs.distribution }}"
-          --channel "${{ inputs.channel }}"
-          --debs "$DEB_FILES"
-          --verbose
-        )
+        # Build command with proper quoting
+        CMD=(.venv-publish/bin/feelpp-apt-publish publish)
+        CMD+=(--component "${{ inputs.component }}")
+        CMD+=(--distro "${{ inputs.distribution }}")
+        CMD+=(--channel "${{ inputs.channel }}")
+        CMD+=(--debs "$DEB_FILES")
+        CMD+=(--verbose)
         
         # Add signing parameters if requested
         if [[ "${{ inputs.sign }}" == "true" ]]; then
@@ -267,19 +266,24 @@ runs:
             echo "Error: gpg-key-id is required when sign=true"
             exit 1
           fi
-          PUBLISH_ARGS+=(--sign --keyid "${{ inputs.gpg-key-id }}")
+          CMD+=(--sign)
+          CMD+=(--keyid "${{ inputs.gpg-key-id }}")
 
           if [[ -n "${{ inputs.gpg-passphrase }}" ]]; then
-            PUBLISH_ARGS+=(--passphrase "${{ inputs.gpg-passphrase }}")
+            CMD+=(--passphrase "${{ inputs.gpg-passphrase }}")
           fi
         fi
 
-        # Add auto-bump if enabled (default: true)
+        # Add auto-bump if enabled
         if [[ "${{ inputs.auto-bump }}" == "true" ]]; then
-          PUBLISH_ARGS+=(--auto-bump)
+          CMD+=(--auto-bump)
         fi
-
-        feelpp-apt-publish publish "${PUBLISH_ARGS[@]}"
+        
+        # Debug: print command
+        echo "Running: ${CMD[@]}"
+        
+        # Execute command
+        "${CMD[@]}"
 
         echo "published=true" >> $GITHUB_OUTPUT
 

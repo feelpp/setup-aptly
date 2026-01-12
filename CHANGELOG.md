@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.5] - 2026-01-12
+
+### Fixed
+- Use full path to feelpp-apt-publish command: `.venv-publish/bin/feelpp-apt-publish`
+- Reverted incorrect venv activation change from 2.2.4
+- Ensures command works correctly in composite action context on self-hosted runners
+
 ## [2.2.4] - 2026-01-12
 
 ### Fixed
