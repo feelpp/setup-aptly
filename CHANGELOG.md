@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-01-12
+
+### Added
+- Integrated `setup-uv` action for faster and more reliable Python environment setup
+- Improved publishing workflow with `uv` package manager
+
+### Changed
+- Updated action to use `astral-sh/setup-uv@v6` for Python dependency installation
+- Simplified Python environment setup in publishing step
+
 ## [2.1.0] - 2026-01-11
 
 ### Added
