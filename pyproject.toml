@@ -1,6 +1,6 @@
 [project]
 name = "setup-aptly-action"
-version = "2.2.1"
+version = "2.2.2"
 description = "GitHub Action for setting up aptly and publishing Debian packages to Feel++ APT repository"
 readme = "README.md"
 requires-python = ">=3.8"

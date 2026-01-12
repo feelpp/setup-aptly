@@ -276,7 +276,7 @@ runs:
           PUBLISH_ARGS+=(--auto-bump)
         fi
 
-        feelpp-apt-publish "${PUBLISH_ARGS[@]}"
+        feelpp-apt-publish "${PUBLISH_ARGS[@]}" publish
 
         echo "published=true" >> $GITHUB_OUTPUT
 

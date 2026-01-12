@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2] - 2026-01-12
+
+### Fixed
+- Publishing command now correctly passes `publish` subcommand to `feelpp-apt-publish` CLI
+- Fixes "error: --keyid is required when --sign is used" when using signing parameters
+
 ## [2.2.1] - 2026-01-12
 
 ### Fixed
