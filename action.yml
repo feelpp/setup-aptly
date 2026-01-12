@@ -218,13 +218,16 @@ runs:
         echo "Installing feelpp-aptly-publisher..."
         if [ -f "$APT_SCRIPTS_PATH/pyproject.toml" ]; then
           uv venv .venv-publish
-          source .venv-publish/bin/activate
           cd "$APT_SCRIPTS_PATH"
           uv pip install -e .
           cd -
         else
+          uv venv .venv-publish
           uv pip install feelpp-aptly-publisher
         fi
+        
+        # Activate venv for subsequent commands
+        source .venv-publish/bin/activate
 
         DEB_FILES="${{ inputs.debs-path }}"
         if [[ "$DEB_FILES" != /* ]]; then
